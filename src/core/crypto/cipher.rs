@@ -29,25 +29,27 @@ impl Cipher {
         encrypted
     }
 
-    pub fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
-        if data.len() < 16 || (data.len() - 16) % BLOCK_SIZE != 0 {
+    pub fn decrypt(&self, data: &[u8], iv: &[u8; 16]) -> Result<Vec<u8>, &'static str> {
+        if data.is_empty() || data.len() % BLOCK_SIZE != 0 {
             return Err("Invalid ciphertext length");
         }
-        
-        let iv = &data[..16];
-        let mut decrypted = Vec::with_capacity(data.len() - 16);
-        let mut prev_block = iv.to_vec();
-
-        for chunk in data[16..].chunks(BLOCK_SIZE) {
+    
+        let mut decrypted = Vec::with_capacity(data.len());
+        let mut prev_block = iv.clone(); // Инициализация IV
+    
+        for chunk in data.chunks(BLOCK_SIZE) {
             let mut block = chunk.to_vec();
             self.invert_block(&mut block);
-            
+    
+            // Применяем XOR с предыдущим блоком (IV для первого)
             xor_bytes(&mut block, &prev_block);
             decrypted.extend_from_slice(&block);
-            prev_block = chunk.to_vec();
+    
+            // Сохраняем текущий зашифрованный блок для следующей итерации
+            prev_block.copy_from_slice(chunk);
         }
-        
-        unpad_data(&decrypted) // Remove padding and validate
+    
+        unpad_data(&decrypted)
     }
 
     fn process_block(&self, block: &mut [u8; BLOCK_SIZE]) {

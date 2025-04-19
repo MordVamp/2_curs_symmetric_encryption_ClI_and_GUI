@@ -37,31 +37,38 @@ pub fn encrypt_file(input_path: &Path, output_path: &Path, password: &str) -> Re
 
 /// Decrypt a file using password
 // Updated decrypt_file function
+/// Decrypt a file using password
 pub fn decrypt_file(
     input_path: &Path,
     output_path: &Path,
     password: &str,
 ) -> Result<(), String> {
+    // Чтение зашифрованных данных
     let encrypted_data = fs::read(input_path)
         .map_err(|e| format!("Error reading file: {}", e))?;
 
+    // Проверка наличия метаданных
     if encrypted_data.len() < 48 {
         return Err("File too short to contain metadata".into());
     }
 
+    // Извлечение метаданных
     let metadata = Metadata::from_bytes(&encrypted_data[0..48])
         .map_err(|e| format!("Metadata error: {}", e))?;
 
+    // Получение IV из метаданных
+    let iv = &metadata.iv;
+
+    // Деривация ключа
     let key = derive_key(password.as_bytes(), &metadata.salt);
     let cipher = Cipher::new(key);
 
-    // Get encrypted payload (without metadata)
+    // Дешифрование данных (без метаданных)
     let ciphertext = &encrypted_data[48..];
-    
-    // Let cipher handle unpadding internally
-    let decrypted_data = cipher.decrypt(ciphertext)
+    let decrypted_data = cipher.decrypt(ciphertext, iv)
         .map_err(|e| format!("Decryption error: {}", e))?;
 
+    // Запись расшифрованных данных
     fs::write(output_path, decrypted_data)
         .map_err(|e| format!("Write error: {}", e))?;
 

@@ -24,5 +24,5 @@ fn test_file_encryption_cycle() {
 
     // Cleanup
     std::fs::remove_file(encrypted_path).unwrap();
-    std::fs::remove_file(decrypted_path).unwrap();
+    //std::fs::remove_file(decrypted_path).unwrap();
 }
