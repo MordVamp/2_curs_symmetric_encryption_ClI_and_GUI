@@ -1,5 +1,6 @@
-//! Metadata handling for encrypted files
-use rand::RngCore;
+//! Обработка метаданных зашифрованных файлов
+
+use crate::core::sys;
 
 #[derive(Debug, PartialEq)]
 pub struct Metadata {
@@ -8,19 +9,15 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Generate new random metadata
+    /// Генерация новых метаданных с использованием системного CSPRNG
     pub fn new() -> Self {
-        let mut salt = [0u8; 32];
-        let mut iv = [0u8; 16];
-        
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(&mut salt);
-        rng.fill_bytes(&mut iv);
-
-        Metadata { salt, iv }
+        Metadata {
+            salt: sys::random_array().expect("Failed to generate salt"),
+            iv: sys::random_array().expect("Failed to generate IV"),
+        }
     }
 
-    /// Serialize metadata to bytes (salt || iv)
+    /// Сериализация метаданных в байты (salt || iv)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(48);
         bytes.extend_from_slice(&self.salt);
@@ -28,7 +25,7 @@ impl Metadata {
         bytes
     }
 
-    /// Deserialize metadata from bytes
+    /// Десериализация метаданных из байтов
     pub fn from_bytes(data: &[u8]) -> Result<Self, &'static str> {
         if data.len() != 48 {
             return Err("Invalid metadata length");
@@ -41,5 +38,24 @@ impl Metadata {
         iv.copy_from_slice(&data[32..48]);
 
         Ok(Metadata { salt, iv })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metadata_serialization_roundtrip() {
+        let original = Metadata::new();
+        let bytes = original.to_bytes();
+        let restored = Metadata::from_bytes(&bytes).unwrap();
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn invalid_data_length() {
+        let data = vec![0u8; 47];
+        assert!(Metadata::from_bytes(&data).is_err());
     }
 }

@@ -1,0 +1,22 @@
+crypto-app/
+├── Cargo.toml
+├── src/
+│   ├── lib.rs               # Core library (shared between CLI/GUI)
+│   ├── main.rs              # CLI entry point
+│   ├── core/
+│   │   ├── mod.rs          # Core components
+│   │   ├── crypto/
+│   │   │   ├── mod.rs      # Cryptographic components
+│   │   │   ├── cipher.rs   # Encryption/decryption implementation
+│   │   │   ├── keygen.rs   # PBKDF2-like key derivation
+│   │   │   ├── s_box.rs    # Substitution boxes
+│   │   │   ├── p_box.rs    # Permutation boxes
+│   │   │   └── Sha256.rs     #  custom sha256
+│   │   ├── io/
+│   │   │   ├── mod.rs      # I/O operations
+│   │   │   ├── file.rs     # File encryption/decryption
+│   │   │   └── meta.rs     # Metadata handling
+│   ├── cli/
+│   │   ├── mod.rs          # CLI logic
+│   └── args.rs         # Command parsing with clap
+│──

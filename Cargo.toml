@@ -8,7 +8,14 @@ edition = "2024"
 clap = { version = "3.2", features = ["derive"] }
 rand = "0.8"
 walkdir = "2.3"
+libc = { version = "0.2", optional = true }
+winapi = { version = "0.3", features = ["winnt", "wincrypt"], optional = true }
 
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winnt", "wincrypt"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 hex = "0.4"
