@@ -36,8 +36,6 @@ pub fn encrypt_file(input_path: &Path, output_path: &Path, password: &str) -> Re
 }
 
 /// Decrypt a file using password
-// Updated decrypt_file function
-/// Decrypt a file using password
 pub fn decrypt_file(
     input_path: &Path,
     output_path: &Path,
