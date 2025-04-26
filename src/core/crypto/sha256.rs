@@ -30,37 +30,36 @@ impl Sha256 {
         }
     }
 
-    pub fn update(mut self, data: &[u8]) -> Self {
-        let mut data = data.iter().copied();
+    pub fn update(&mut self, data: &[u8]) -> &mut Self {
+        let mut data_pos = 0;
         let buffer_len = (self.length % 64) as usize;
 
-        // Fill the buffer
-        for i in buffer_len..64 {
-            if let Some(byte) = data.next() {
-                self.buffer[i] = byte;
-                self.length += 1;
-            } else {
-                return self;
+        // 1. Filling a partial buffer
+        if buffer_len > 0 {
+            let to_copy = (64 - buffer_len).min(data.len());
+            self.buffer[buffer_len..buffer_len + to_copy].copy_from_slice(&data[..to_copy]);
+            self.length += to_copy as u64;
+            data_pos += to_copy;
+
+            if buffer_len + to_copy == 64 {
+                self.process_block();
             }
         }
 
-        self.process_block();
-
-        // Process remaining data in 64-byte chunks
-        let remaining: Vec<u8> = data.collect();
-        let mut chunks = remaining.chunks_exact(64);
-        for chunk in chunks.by_ref() {
-            self.buffer.copy_from_slice(chunk);
+        // 2.Process remaining data in 64-byte chunks
+        while data_pos + 64 <= data.len() {
+            self.buffer.copy_from_slice(&data[data_pos..data_pos + 64]);
             self.process_block();
             self.length += 64;
+            data_pos += 64;
         }
 
-        // Copy any remaining data to the buffer
-        let remainder = chunks.remainder();
-        let remainder_len = remainder.len();
-        if remainder_len > 0 {
-            self.buffer[..remainder_len].copy_from_slice(remainder);
-            self.length += remainder_len as u64;
+        // 3.Copy any remaining data to the buffer
+        let remaining = &data[data_pos..];
+        if !remaining.is_empty() {
+            let new_len = (self.length % 64) as usize;
+            self.buffer[new_len..new_len + remaining.len()].copy_from_slice(remaining);
+            self.length += remaining.len() as u64;
         }
 
         self
@@ -121,23 +120,29 @@ impl Sha256 {
     }
 
     pub fn finalize(mut self) -> [u8; 32] {
-        let len_bits = self.length.wrapping_mul(8);
-        let l_mod = (self.length % 64) as isize;
-        let pad_len = (55 - l_mod).rem_euclid(64) as usize;
+        let len_bits = self.length * 8;
+        let buffer_len = (self.length % 64) as usize;
 
-        // Append 0x80 and padding
-        self = self.update(&[0x80]);
-        self = self.update(&vec![0u8; pad_len]);
-        self = self.update(&len_bits.to_be_bytes());
+        self.buffer[buffer_len] = 0x80;
+        let after_80 = buffer_len + 1;
 
-        // Ensure the final block is processed
-        if (self.length % 64) != 0 {
-            panic!("Final block not processed correctly");
+        if after_80 <= 56 {
+            // Is there enough room for length in this block?
+            self.buffer[after_80..56].fill(0);
+            self.buffer[56..64].copy_from_slice(&len_bits.to_be_bytes());
+            self.process_block();
+        } else {
+            // Need an additional block
+            self.buffer[after_80..64].fill(0);
+            self.process_block();
+            self.buffer[0..56].fill(0);
+            self.buffer[56..64].copy_from_slice(&len_bits.to_be_bytes());
+            self.process_block();
         }
 
         let mut result = [0u8; 32];
-        for (i, word) in self.hash.iter().enumerate() {
-            result[i*4..(i+1)*4].copy_from_slice(&word.to_be_bytes());
+        for (i, &word) in self.hash.iter().enumerate() {
+            result[i * 4..(i + 1) * 4].copy_from_slice(&word.to_be_bytes());
         }
         result
     }

@@ -1,6 +1,6 @@
 //! PBKDF2-like key derivation
 use super::sha256::Sha256;
-
+//все исправления не забыть  убрать  в следущем коммитте
 const ITERATIONS: usize = 100_000;
 
 pub fn derive_key(password: &[u8], salt: &[u8]) -> [u8; 32] {
@@ -15,7 +15,8 @@ fn pbkdf2_hmac(password: &[u8], salt: &[u8], iterations: usize, key: &mut [u8]) 
     salt_block[..salt.len()].copy_from_slice(salt);
 
     for (block_idx, key_chunk) in key.chunks_mut(32).enumerate() {
-        salt_block[salt.len()..].copy_from_slice(&(block_idx as u32 + 1).to_be_bytes());
+        let block_num = (block_idx as u32 + 1).to_be_bytes();
+        salt_block[salt.len()..].copy_from_slice(&block_num);
         
         let mut t = hmac.compute(&salt_block);
         let mut u = t;
@@ -37,8 +38,11 @@ struct HmacSha256 {
 impl HmacSha256 {
     fn new(key: &[u8]) -> Self {
         let mut processed_key = [0u8; 64];
+        // Исправление: использование мутабельного hasher
         if key.len() > 64 {
-            let hash = Sha256::new().update(key).finalize();
+            let mut hasher = Sha256::new();
+            hasher.update(key);
+            let hash = hasher.finalize();
             processed_key[..32].copy_from_slice(&hash);
         } else {
             processed_key[..key.len()].copy_from_slice(key);
@@ -56,15 +60,16 @@ impl HmacSha256 {
     }
 
     fn compute(&self, data: &[u8]) -> [u8; 32] {
-        let inner_hash = Sha256::new()
-            .update(&self.inner_key)
-            .update(data)
-            .finalize();
+        // Исправление: правильная работа с мутабельными ссылками
+        let mut inner_hasher = Sha256::new();
+        inner_hasher.update(&self.inner_key);
+        inner_hasher.update(data);
+        let inner_hash = inner_hasher.finalize();
         
-        Sha256::new()
-            .update(&self.outer_key)
-            .update(&inner_hash)
-            .finalize()
+        let mut outer_hasher = Sha256::new();
+        outer_hasher.update(&self.outer_key);
+        outer_hasher.update(&inner_hash);
+        outer_hasher.finalize()
     }
 }
 
