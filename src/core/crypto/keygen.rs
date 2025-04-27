@@ -1,7 +1,10 @@
 //! PBKDF2-like key derivation
 use super::sha256::Sha256;
-//все исправления не забыть  убрать  в следущем коммитте
-const ITERATIONS: usize = 100_000;
+
+#[cfg(feature = "test-iterations")]
+const ITERATIONS: usize = 100;  
+#[cfg(not(feature = "test-iterations"))]
+const ITERATIONS: usize = 100_000; 
 
 pub fn derive_key(password: &[u8], salt: &[u8]) -> [u8; 32] {
     let mut key = [0u8; 32];
@@ -38,7 +41,7 @@ struct HmacSha256 {
 impl HmacSha256 {
     fn new(key: &[u8]) -> Self {
         let mut processed_key = [0u8; 64];
-        // Исправление: использование мутабельного hasher
+       
         if key.len() > 64 {
             let mut hasher = Sha256::new();
             hasher.update(key);
@@ -60,7 +63,7 @@ impl HmacSha256 {
     }
 
     fn compute(&self, data: &[u8]) -> [u8; 32] {
-        // Исправление: правильная работа с мутабельными ссылками
+        
         let mut inner_hasher = Sha256::new();
         inner_hasher.update(&self.inner_key);
         inner_hasher.update(data);

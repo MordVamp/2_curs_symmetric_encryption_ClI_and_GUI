@@ -3,6 +3,10 @@ name = "crypto-app"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+test-iterations = []
+[profile.test]
+features = ["test-iterations"]
 [dependencies]
 
 tar = "0.4.44"
@@ -11,5 +15,6 @@ rand = "0.8.3"
 walkdir = "2.5"
 tempfile = "3.19"
 hex-literal="1.0.0"
+nistrs="0.1.2"
 [dev-dependencies]
 hex = "0.4"
