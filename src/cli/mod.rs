@@ -13,7 +13,7 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum Command {
-    Encrypt {
+    EncryptFile {
         #[clap(short, long)]
         password: String,
         #[clap(short, long)]
@@ -21,7 +21,23 @@ pub enum Command {
         #[clap(short, long)]
         output: PathBuf,
     },
-    Decrypt {
+    DecryptFile {
+        #[clap(short, long)]
+        password: String,
+        #[clap(short, long)]
+        input: PathBuf,
+        #[clap(short, long)]
+        output: PathBuf,
+    },
+    EncryptDir {
+        #[clap(short, long)]
+        password: String,
+        #[clap(short, long)]
+        input: PathBuf,
+        #[clap(short, long)]
+        output: PathBuf,
+    },
+    DecryptDir {
         #[clap(short, long)]
         password: String,
         #[clap(short, long)]
