@@ -1,9 +1,38 @@
 use super::{s_box::S_BOX, p_box::P_BOX};
 use arrayref::array_ref;
-use rayon::prelude::*; // Добавлен параллелизм
+use rayon::prelude::*;
+use std::arch::x86_64::{__m128i, _mm_loadu_si128, _mm_storeu_si128, _mm_xor_si128};
+use core::array;
 
 const BLOCK_SIZE: usize = 16;
 
+#[derive(Copy, Clone)] // Добавлены трейты Copy и Clone
+struct PermutationInfo {
+    old_byte: usize,
+    old_bit: u8,
+}
+
+// Предварительно вычисленная таблица перестановок с использованием array::from_fn
+const PERMUTATION_TABLE: [[PermutationInfo; 8]; 16] = {
+    let mut table = [[PermutationInfo { old_byte: 0, old_bit: 0 }; 8]; 16];
+    
+    // Вычисление значений для каждого элемента в константном контексте
+    let mut new_byte = 0;
+    while new_byte < 16 {
+        let mut new_bit = 0;
+        while new_bit < 8 {
+            let pos = new_byte * 8 + (7 - new_bit);
+            let old_pos = P_BOX[pos];
+            table[new_byte][new_bit] = PermutationInfo {
+                old_byte: old_pos / 8,
+                old_bit: (7 - (old_pos % 8)) as u8,
+            };
+            new_bit += 1;
+        }
+        new_byte += 1;
+    }
+    table
+};
 pub struct Cipher {
     key: [u8; 32],
     key1: [u8; 16],
@@ -21,7 +50,6 @@ impl Cipher {
         let (nonce, counter_part) = iv.split_at(12);
         let initial_counter = u32::from_be_bytes(counter_part.try_into().unwrap()) as u64;
 
-        // Параллельная обработка блоков
         let encrypted_chunks: Vec<Vec<u8>> = data
             .par_chunks(BLOCK_SIZE)
             .enumerate()
@@ -45,6 +73,7 @@ impl Cipher {
         encrypted.extend(encrypted_chunks.concat());
         encrypted
     }
+
     pub fn decrypt(&self, data: &[u8], iv: &[u8; 16]) -> Result<Vec<u8>, &'static str> {
         if data.len() < BLOCK_SIZE {
             return Err("Invalid ciphertext length");
@@ -53,7 +82,6 @@ impl Cipher {
         let (nonce, counter_part) = iv.split_at(12);
         let initial_counter = u32::from_be_bytes(counter_part.try_into().unwrap()) as u64;
 
-        // Параллельная обработка блоков (кроме IV)
         let decrypted_chunks: Vec<Vec<u8>> = data[BLOCK_SIZE..]
             .par_chunks(BLOCK_SIZE)
             .enumerate()
@@ -76,46 +104,45 @@ impl Cipher {
         Ok(decrypted_chunks.concat())
     }
 
-    #[inline(always)] // Агрессивная оптимизация
+    #[inline(always)]
     fn process_block(&self, input: &mut [u8; 16], output: &mut [u8; 16]) {
         let mut block = *input;
         
-        // Объединенные операции для минимизации циклов
-        for byte in &mut block {
-            *byte = S_BOX[*byte as usize];
-        }
+        // Первый раунд
+        block.iter_mut().for_each(|byte| *byte = S_BOX[*byte as usize]);
         permute_bits(&mut block);
-        xor_bytes(&mut block, &self.key1);
+        xor_bytes_simd(&mut block, &self.key1);
 
-        for byte in &mut block {
-            *byte = S_BOX[*byte as usize];
-        }
+        // Второй раунд
+        block.iter_mut().for_each(|byte| *byte = S_BOX[*byte as usize]);
         permute_bits(&mut block);
-        xor_bytes(&mut block, &self.key2);
+        xor_bytes_simd(&mut block, &self.key2);
         
         output.copy_from_slice(&block);
     }
 }
 
-// Оптимизированные функции
 #[inline(always)]
 fn permute_bits(block: &mut [u8; 16]) {
     let mut new_block = [0u8; 16];
-    for i in 0..128 {
-        let old_byte = P_BOX[i] / 8;
-        let old_bit = 7 - (P_BOX[i] % 8);
-        let bit = (block[old_byte] >> old_bit) & 1;
-        
-        let new_byte = i / 8;
-        let new_bit = 7 - (i % 8);
-        new_block[new_byte] |= bit << new_bit;
+    for (new_byte, bits) in PERMUTATION_TABLE.iter().enumerate() {
+        new_block[new_byte] = bits.iter().enumerate()
+            .fold(0u8, |acc, (new_bit, info)| {
+                let bit = (block[info.old_byte] >> info.old_bit) & 1;
+                acc | (bit << (7 - new_bit))
+            });
     }
     *block = new_block;
 }
 
 #[inline(always)]
-fn xor_bytes(a: &mut [u8; 16], b: &[u8; 16]) {
-    for i in 0..16 {
-        a[i] ^= b[i];
+fn xor_bytes_simd(a: &mut [u8; 16], b: &[u8; 16]) {
+    unsafe {
+        let a_ptr = a.as_mut_ptr() as *mut __m128i;
+        let b_ptr = b.as_ptr() as *const __m128i;
+        let a_vec = _mm_loadu_si128(a_ptr);
+        let b_vec = _mm_loadu_si128(b_ptr);
+        let res = _mm_xor_si128(a_vec, b_vec);
+        _mm_storeu_si128(a_ptr, res);
     }
 }

@@ -8,20 +8,32 @@ fn main() {
     
     match &args.command {
         cli::Command::EncryptFile { password, input, output } => {
-            file::encrypt_file(input, output, password)
-                .unwrap_or_else(|e| eprintln!("Error: {}", e));
+            if let Err(e) = file::encrypt_file(input, output, password) {
+                eprintln!("❌Ошибка шифрования файла: {}💧", e);
+            } else {
+                println!("✅ Файл успешно зашифрован и сохранен в: {}", output.display());
+            }
         }
         cli::Command::DecryptFile { password, input, output } => {
-            file::decrypt_file(input, output, password)
-                .unwrap_or_else(|e| eprintln!("Error: {}", e));
+            if let Err(e) = file::decrypt_file(input, output, password) {
+                eprintln!("❌Ошибка дешифрования файла: {}", e);
+            } else {
+                println!("✅ Файл успешно дешифрован и сохранен в: {}", output.display());
+            }
         }
         cli::Command::EncryptDir { password, input, output } => {
-            folder::encrypt_directory(input, output, password)
-                .unwrap_or_else(|e| eprintln!("Error: {}", e));
+            if let Err(e) = folder::encrypt_directory(input, output, password) {
+                eprintln!("Ошибка шифрования директории: {}", e);
+            } else {
+                println!("✅ Директория успешно зашифрована и сохранена в: {}", output.display());
+            }
         }
         cli::Command::DecryptDir { password, input, output } => {
-            folder::decrypt_directory(input, output, password)
-                .unwrap_or_else(|e| eprintln!("Error: {}", e));
+            if let Err(e) = folder::decrypt_directory(input, output, password) {
+                eprintln!("Ошибка дешифрования директории: {}", e);
+            } else {
+                println!("✅ Директория успешно дешифрована и сохранена в: {}", output.display());
+            }
         }
     }
 }
