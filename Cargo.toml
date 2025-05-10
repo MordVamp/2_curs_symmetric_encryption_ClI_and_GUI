@@ -16,5 +16,9 @@ walkdir = "2.5"
 tempfile = "3.19"
 hex-literal="1.0.0"
 nistrs="0.1.2"
+arrayref = "0.3.7"
+ rayon = "1.5"
+ parking_lot = "0.12"
+ 
 [dev-dependencies]
 hex = "0.4"

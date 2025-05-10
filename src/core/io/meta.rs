@@ -8,16 +8,22 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Generate new random metadata
+    /// Generate new metadata with random salt and IV (nonce + counter)
     pub fn new() -> Self {
         let mut salt = [0u8; 32];
         let mut iv = [0u8; 16];
         
         let mut rng = rand::thread_rng();
         rng.fill_bytes(&mut salt);
-        rng.fill_bytes(&mut iv);
-
+        rng.fill_bytes(&mut iv[..12]); // ONLY nonce (FIRTS 12 байт)
+        
         Metadata { salt, iv }
+    }
+    pub fn increment_counter(&mut self) {
+        let counter_bytes = &mut self.iv[12..16];
+        let mut counter = u32::from_be_bytes(counter_bytes.try_into().unwrap());
+        counter += 1;
+        counter_bytes.copy_from_slice(&counter.to_be_bytes());
     }
 
     /// Serialize metadata to bytes (salt || iv)

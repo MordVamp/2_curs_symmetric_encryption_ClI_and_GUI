@@ -1,168 +1,121 @@
-use super::{s_box::{S_BOX, INV_S_BOX}, p_box::{P_BOX, INV_P_BOX}}; // Add INV_P_BOX import
+use super::{s_box::S_BOX, p_box::P_BOX};
+use arrayref::array_ref;
+use rayon::prelude::*; // Добавлен параллелизм
 
 const BLOCK_SIZE: usize = 16;
 
 pub struct Cipher {
     key: [u8; 32],
+    key1: [u8; 16],
+    key2: [u8; 16],
 }
 
 impl Cipher {
     pub fn new(key: [u8; 32]) -> Self {
-        Cipher { key }
+        let key1 = *array_ref!(key, 0, 16);
+        let key2 = *array_ref!(key, 16, 16);
+        Cipher { key, key1, key2 }
     }
 
     pub fn encrypt(&self, data: &[u8], iv: &[u8; 16]) -> Vec<u8> {
-        let padded_data = pad_data(data);
-        let mut encrypted = Vec::with_capacity(padded_data.len());
-        
-        let mut prev_block = *iv;
-        for chunk in padded_data.chunks(BLOCK_SIZE) {
-            let mut block = [0u8; BLOCK_SIZE];
-            block.copy_from_slice(chunk);
-            
-            xor_bytes(&mut block, &prev_block);
-            self.process_block(&mut block);
-            
-            encrypted.extend_from_slice(&block);
-            prev_block = block;
-        }
+        let (nonce, counter_part) = iv.split_at(12);
+        let initial_counter = u32::from_be_bytes(counter_part.try_into().unwrap()) as u64;
+
+        // Параллельная обработка блоков
+        let encrypted_chunks: Vec<Vec<u8>> = data
+            .par_chunks(BLOCK_SIZE)
+            .enumerate()
+            .map(|(i, chunk)| {
+                let mut ctr_block = [0u8; 16];
+                ctr_block[..12].copy_from_slice(nonce);
+                let counter = initial_counter + i as u64;
+                ctr_block[12..].copy_from_slice(&counter.to_be_bytes()[4..]);
+
+                let mut key_stream = [0u8; BLOCK_SIZE];
+                self.process_block(&mut ctr_block, &mut key_stream);
+
+                chunk.iter()
+                    .zip(key_stream.iter())
+                    .map(|(d, k)| d ^ k)
+                    .collect()
+            })
+            .collect();
+
+        let mut encrypted = iv.to_vec();
+        encrypted.extend(encrypted_chunks.concat());
         encrypted
     }
-
     pub fn decrypt(&self, data: &[u8], iv: &[u8; 16]) -> Result<Vec<u8>, &'static str> {
-        if data.is_empty() || data.len() % BLOCK_SIZE != 0 {
+        if data.len() < BLOCK_SIZE {
             return Err("Invalid ciphertext length");
         }
-    
-        let mut decrypted = Vec::with_capacity(data.len());
-        let mut prev_block = iv.clone(); // Инициализация IV
-    
-        for chunk in data.chunks(BLOCK_SIZE) {
-            let mut block = chunk.to_vec();
-            self.invert_block(&mut block);
-    
-            // Применяем XOR с предыдущим блоком (IV для первого)
-            xor_bytes(&mut block, &prev_block);
-            decrypted.extend_from_slice(&block);
-    
-            // Сохраняем текущий зашифрованный блок для следующей итерации
-            prev_block.copy_from_slice(chunk);
+
+        let (nonce, counter_part) = iv.split_at(12);
+        let initial_counter = u32::from_be_bytes(counter_part.try_into().unwrap()) as u64;
+
+        // Параллельная обработка блоков (кроме IV)
+        let decrypted_chunks: Vec<Vec<u8>> = data[BLOCK_SIZE..]
+            .par_chunks(BLOCK_SIZE)
+            .enumerate()
+            .map(|(i, chunk)| {
+                let mut ctr_block = [0u8; 16];
+                ctr_block[..12].copy_from_slice(nonce);
+                let counter = initial_counter + i as u64;
+                ctr_block[12..].copy_from_slice(&counter.to_be_bytes()[4..]);
+
+                let mut key_stream = [0u8; BLOCK_SIZE];
+                self.process_block(&mut ctr_block, &mut key_stream);
+
+                chunk.iter()
+                    .zip(key_stream.iter())
+                    .map(|(c, k)| c ^ k)
+                    .collect()
+            })
+            .collect();
+
+        Ok(decrypted_chunks.concat())
+    }
+
+    #[inline(always)] // Агрессивная оптимизация
+    fn process_block(&self, input: &mut [u8; 16], output: &mut [u8; 16]) {
+        let mut block = *input;
+        
+        // Объединенные операции для минимизации циклов
+        for byte in &mut block {
+            *byte = S_BOX[*byte as usize];
         }
-    
-        unpad_data(&decrypted)
-    }
+        permute_bits(&mut block);
+        xor_bytes(&mut block, &self.key1);
 
-    fn process_block(&self, block: &mut [u8; BLOCK_SIZE]) {
-        let key1 = &self.key[..16];
-        let key2 = &self.key[16..32];
+        for byte in &mut block {
+            *byte = S_BOX[*byte as usize];
+        }
+        permute_bits(&mut block);
+        xor_bytes(&mut block, &self.key2);
         
-        // Round 1
-        substitute_bytes(block, &S_BOX);
-        permute_bits(block, &P_BOX);
-        xor_bytes(block, key1);
-        
-        // Round 2
-        substitute_bytes(block, &S_BOX);
-        permute_bits(block, &P_BOX);
-        xor_bytes(block, key2);
-    }
-
-    fn invert_block(&self, block: &mut [u8]) {
-        let key1 = &self.key[..16];
-        let key2 = &self.key[16..32];
-        
-        // Reverse Round 2
-        xor_bytes(block, key2);
-        inverse_permute_bits(block, &INV_P_BOX); // Use inverse P-box
-        inverse_substitute_bytes(block, &INV_S_BOX);
-        
-        // Reverse Round 1
-        xor_bytes(block, key1);
-        inverse_permute_bits(block, &INV_P_BOX); // Use inverse P-box
-        inverse_substitute_bytes(block, &INV_S_BOX);
+        output.copy_from_slice(&block);
     }
 }
 
-
-// Helper functions (similar to earlier explanation)
-fn substitute_bytes(block: &mut [u8], s_box: &[u8; 256]) {
-    for byte in block.iter_mut() {
-        *byte = s_box[*byte as usize];
-    }
-}
-
-fn inverse_substitute_bytes(block: &mut [u8], inv_s_box: &[u8; 256]) {
-    for byte in block.iter_mut() {
-        *byte = inv_s_box[*byte as usize];
-    }
-}
-
-fn permute_bits(block: &mut [u8], p_box: &[usize; 128]) {
+// Оптимизированные функции
+#[inline(always)]
+fn permute_bits(block: &mut [u8; 16]) {
     let mut new_block = [0u8; 16];
-    
-    // Process each bit position
-    for (new_bit_idx, &old_bit_idx) in p_box.iter().enumerate() {
-        let old_byte_idx = old_bit_idx / 8;
-        let old_bit_pos = 7 - (old_bit_idx % 8);
-        let new_byte_idx = new_bit_idx / 8;
-        let new_bit_pos = 7 - (new_bit_idx % 8);
+    for i in 0..128 {
+        let old_byte = P_BOX[i] / 8;
+        let old_bit = 7 - (P_BOX[i] % 8);
+        let bit = (block[old_byte] >> old_bit) & 1;
         
-        // Get bit value from original block
-        let bit = (block[old_byte_idx] >> old_bit_pos) & 1;
-        
-        // Set bit in new block
-        new_block[new_byte_idx] |= bit << new_bit_pos;
+        let new_byte = i / 8;
+        let new_bit = 7 - (i % 8);
+        new_block[new_byte] |= bit << new_bit;
     }
-    
-    block.copy_from_slice(&new_block);
+    *block = new_block;
 }
 
-fn inverse_permute_bits(block: &mut [u8], inv_p_box: &[usize; 128]) {
-    let mut new_block = [0u8; 16];
-    
-    // Process each bit position using inverse permutation
-    for (old_bit_idx, &new_bit_idx) in inv_p_box.iter().enumerate() {
-        let old_byte_idx = old_bit_idx / 8;
-        let old_bit_pos = 7 - (old_bit_idx % 8);
-        let new_byte_idx = new_bit_idx / 8;
-        let new_bit_pos = 7 - (new_bit_idx % 8);
-        
-        // Get bit value from permuted block
-        let bit = (block[new_byte_idx] >> new_bit_pos) & 1;
-        
-        // Set bit in original position
-        new_block[old_byte_idx] |= bit << old_bit_pos;
+#[inline(always)]
+fn xor_bytes(a: &mut [u8; 16], b: &[u8; 16]) {
+    for i in 0..16 {
+        a[i] ^= b[i];
     }
-    
-    block.copy_from_slice(&new_block);
-}
-
-fn xor_bytes(a: &mut [u8], b: &[u8]) {
-    for (a_byte, b_byte) in a.iter_mut().zip(b) {
-        *a_byte ^= b_byte;
-    }
-
-}
- // Add PKCS#7 padding
- pub fn pad_data(data: &[u8]) -> Vec<u8> {
-    let block_size = BLOCK_SIZE;
-    let pad_len = block_size - (data.len() % block_size);
-    let mut padded = data.to_vec();
-    padded.extend(vec![pad_len as u8; pad_len]);
-    padded
-}
-
-// Remove PKCS#7 padding
-pub fn unpad_data(data: &[u8]) -> Result<Vec<u8>, &'static str> {
-    let pad_len = *data.last().unwrap() as usize;
-    if pad_len == 0 || pad_len > BLOCK_SIZE {
-        return Err("Invalid padding");
-    }
-    
-    let len = data.len() - pad_len;
-    if data[len..].iter().any(|&b| b != pad_len as u8) {
-        return Err("Invalid padding");
-    }
-    
-    Ok(data[..len].to_vec())
 }

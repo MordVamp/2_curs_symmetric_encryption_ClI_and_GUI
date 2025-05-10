@@ -19,7 +19,11 @@ fn test_cipher_nist_full() {
     
     let key = derive_key(&password, &salt);
     let cipher = Cipher::new(key);
-    let iv = [0u8; 16];
+    
+    // Генерация случайного IV для каждого теста
+    let mut iv = [0u8; 16];
+    rng.fill(&mut iv[..12]); // nonce (12 байт)
+    iv[12..].copy_from_slice(&0u32.to_be_bytes()); // counter (4 байта)
     
     // Генерация случайного plaintext
     let mut plaintext = vec![0u8; SAMPLE_SIZE];
