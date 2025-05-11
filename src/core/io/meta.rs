@@ -1,5 +1,5 @@
 //! Metadata handling for encrypted files
-use rand::RngCore;
+use crate::core::io::RCTMPrng::RCTMPrng;
 
 #[derive(Debug, PartialEq)]
 pub struct Metadata {
@@ -8,14 +8,14 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Generate new metadata with random salt and IV (nonce + counter)
+    /// Generate new metadata with random salt and IV (nonce + counter)    
     pub fn new() -> Self {
         let mut salt = [0u8; 32];
         let mut iv = [0u8; 16];
         
-        let mut rng = rand::thread_rng();
+        let mut rng = RCTMPrng::from_entropy().expect("Failed to initialize CSPRNG");
         rng.fill_bytes(&mut salt);
-        rng.fill_bytes(&mut iv[..12]); // ONLY nonce (FIRTS 12 байт)
+        rng.fill_bytes(&mut iv[..12]);
         
         Metadata { salt, iv }
     }
