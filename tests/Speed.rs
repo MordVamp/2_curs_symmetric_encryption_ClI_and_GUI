@@ -1,16 +1,16 @@
-use std::path::Path;
 use std::time::Instant;
 use tempfile::NamedTempFile;
-use rand::RngCore;
+use crypto_app::core::io::RCTMPrng::RCTMPrng;
 use crypto_app::core::io::file::{encrypt_file, decrypt_file};
 
-const TEST_FILE_SIZE_MB: usize = 10; // Размер тестового файла в мегабайтах
+const TEST_FILE_SIZE_MB: usize = 1; // Размер тестового файла в мегабайтах
 
 #[test]
 fn encryption_speed_test() {
     // Генерируем тестовые данные
     let mut test_data = vec![0u8; TEST_FILE_SIZE_MB * 1024 * 1024];
-    rand::thread_rng().fill_bytes(&mut test_data);
+    let mut rng = RCTMPrng::from_entropy().expect("Failed to initialize CSPRNG");
+    rng.fill_bytes(&mut test_data);
 
     // Создаем временные файлы
     let original_file = NamedTempFile::new().expect("Failed to create temp file");

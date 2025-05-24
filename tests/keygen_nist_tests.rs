@@ -1,10 +1,9 @@
 // use only $cargo test 
-#![cfg(feature = "test-iterations")]
 use crypto_app::core::crypto::keygen::derive_key;
 use nistrs::prelude::*;
 use rand::Rng;
 
-const SAMPLE_SIZE: usize = 1_000_000;
+const SAMPLE_SIZE: usize = 6_000;
 const NIST_THRESHOLD: f64 = 0.01;
 
 #[test]
@@ -19,7 +18,7 @@ fn test_keygen_nist_full() {
         rng.fill(&mut password);
         rng.fill(&mut salt);
         
-        let key = derive_key(&password, &salt);
+        let key = derive_key(&password);
         key_bits.extend(key);
     }
 

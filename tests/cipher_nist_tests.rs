@@ -1,5 +1,3 @@
-// crypto-app/tests/cipher_nist_tests.rs
-
 use crypto_app::core::crypto::{cipher::Cipher, keygen::derive_key};
 use nistrs::prelude::*;
 use rand::Rng;
@@ -17,7 +15,7 @@ fn test_cipher_nist_full() {
     rng.fill(&mut password);
     rng.fill(&mut salt);
     
-    let key = derive_key(&password, &salt);
+    let key = derive_key(&password);
     let cipher = Cipher::new(key);
     
     // Генерация случайного IV для каждого теста

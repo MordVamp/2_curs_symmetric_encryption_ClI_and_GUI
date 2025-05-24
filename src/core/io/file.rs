@@ -10,7 +10,7 @@ pub fn encrypt_file(input_path: &Path, output_path: &Path, password: &str) -> Re
     
     let mut metadata = Metadata::new(); 
     
-    let key = derive_key(password.as_bytes(), &metadata.salt);
+    let key = derive_key(password.as_bytes());
     let cipher = Cipher::new(key);
     
     let encrypted_data = cipher.encrypt(&data, &metadata.iv);
@@ -38,7 +38,7 @@ pub fn decrypt_file(
     let metadata = Metadata::from_bytes(&encrypted_data[0..48])
         .map_err(|e| format!("Metadata error: {}", e))?;
 
-    let key = derive_key(password.as_bytes(), &metadata.salt);
+    let key = derive_key(password.as_bytes());
     let cipher = Cipher::new(key);
 
     let decrypted_data = cipher.decrypt(&encrypted_data[48..], &metadata.iv)
