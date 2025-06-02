@@ -1,31 +1,29 @@
 use crypto_app::core::crypto::{cipher::Cipher, keygen::derive_key};
 use nistrs::prelude::*;
-use rand::Rng;
+use crypto_app::core::io::RCTMPrng::RCTMPrng;
 
 const SAMPLE_SIZE: usize = 1_000_000;
 const NIST_THRESHOLD: f64 = 0.01;
 
 #[test]
 fn test_cipher_nist_full() {
-    let mut rng = rand::thread_rng();
+    let mut rng = RCTMPrng::from_entropy().expect("Failed to initialize CSPRNG");
     
     // Генерация ключа и данных
     let mut password = [0u8; 32];
-    let mut salt = [0u8; 32];
-    rng.fill(&mut password);
-    rng.fill(&mut salt);
+    rng.fill_bytes(&mut password);
     
     let key = derive_key(&password);
     let cipher = Cipher::new(key);
     
     // Генерация случайного IV для каждого теста
     let mut iv = [0u8; 16];
-    rng.fill(&mut iv[..12]); // nonce (12 байт)
+    rng.fill_bytes(&mut iv[..12]); // nonce (12 байт)
     iv[12..].copy_from_slice(&0u32.to_be_bytes()); // counter (4 байта)
     
     // Генерация случайного plaintext
     let mut plaintext = vec![0u8; SAMPLE_SIZE];
-    rng.fill(&mut plaintext[..]);
+    rng.fill_bytes(&mut plaintext[..]);
     
     // Шифрование
     let ciphertext = cipher.encrypt(&plaintext, &iv);

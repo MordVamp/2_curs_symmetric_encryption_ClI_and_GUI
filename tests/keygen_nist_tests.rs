@@ -1,22 +1,21 @@
 // use only $cargo test 
 use crypto_app::core::crypto::keygen::derive_key;
 use nistrs::prelude::*;
-use rand::Rng;
+use crypto_app::core::io::RCTMPrng::RCTMPrng;
 
 const SAMPLE_SIZE: usize = 6_000;
 const NIST_THRESHOLD: f64 = 0.01;
 
 #[test]
 fn test_keygen_nist_full() {
-    let mut rng = rand::thread_rng();
+    let mut rng = RCTMPrng::from_entropy().expect("Failed to initialize CSPRNG");
     let mut key_bits = Vec::new();
     
     // Генерация тестовых данных
     for _ in 0..SAMPLE_SIZE / 32 {
         let mut password = [0u8; 32];
         let mut salt = [0u8; 32];
-        rng.fill(&mut password);
-        rng.fill(&mut salt);
+        rng.fill_bytes(&mut password);
         
         let key = derive_key(&password);
         key_bits.extend(key);
